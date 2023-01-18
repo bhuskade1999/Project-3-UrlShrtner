@@ -24,8 +24,9 @@ redisClient.on("connect", async function () {
 
 //2. Prepare the functions for each command
 
-const SET_ASYNC = promisify(redisClient.SET).bind(redisClient);
+const SET_ASYNC = promisify(redisClient.SETEX).bind(redisClient);
 const GET_ASYNC = promisify(redisClient.GET).bind(redisClient)
+
 //--------------------------------CreateUrl------------------------------------------------//
 const createUrl = async function (req, res) {
   try {
@@ -54,11 +55,11 @@ const createUrl = async function (req, res) {
         .send({ status: false, message: "please enter validUrl" });
     }
 
-    let codeUrl = await urlModel.findOne({ longUrl: longUrl }).select({_id:0,urlCode:1,longUrl:1,shortUrl:1});
+    let codeUrl = await GET_ASYNC(`${req.body.longUrl}`)
     if (codeUrl) {
       return res
         .status(200)
-        .send({status:true, message: "ShortUrl already generated", data: codeUrl });
+        .send({status:true, message: "ShortUrl already generated", data:JSON.parse(codeUrl)  });
     }
     let urlCode = shortId.generate(longUrl);
 
@@ -67,6 +68,7 @@ const createUrl = async function (req, res) {
     data["longUrl"] = longUrl;
     data["shortUrl"] = shortUrl;
     let createdUrl = await urlModel.create(data);
+    await SET_ASYNC(`${req.body.longUrl}`,86400,JSON.stringify(data))
     res.status(201).send({ status:true,data: data });
   } catch (err) {
     res.status(500).send({ status: false, err: err.message });
@@ -87,7 +89,12 @@ const getUrl = async function (req, res) {
         .status(400)
         .send({ status: false, message: "plese enter valid url code" });
     }
-
+   
+    let cachedURL=await GET_ASYNC(`${req.params.urlCode}`)
+    if(cachedURL){
+       let cacheLongUrl=JSON.parse(cachedURL)
+      return res.status(302).redirect(cacheLongUrl.longUrl);
+    }
     let isUrl = await urlModel
       .findOne({ urlCode: urlCode })
       .select({ _id: 0, longUrl: 1 });
@@ -96,8 +103,11 @@ const getUrl = async function (req, res) {
         .status(404)
         .send({ status: false, message: "longUrl not found" });
     }
+   
     let longUrl = isUrl.longUrl;
+    await SET_ASYNC(`${req.params.urlCode}`,86400,JSON.stringify(isUrl))
     return res.status(302).redirect(longUrl);
+    
   } catch (err) {
     return res.status(500).send({ status: false, err: err.message });
   }
