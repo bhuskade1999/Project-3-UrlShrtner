@@ -59,8 +59,16 @@ const createUrl = async function (req, res) {
     if (codeUrl) {
       return res
         .status(200)
-        .send({status:true, message: "ShortUrl already generated", data:JSON.parse(codeUrl)  });
+        .send({status:true, message: "ShortUrl already generated1", data:JSON.parse(codeUrl)  });
     }
+    let verify = await urlModel.findOne({ longUrl: longUrl.trim() }).select({_id:0,urlCode:1,longUrl:1,shortUrl:1});
+    if (verify) {
+      await SET_ASYNC(`${req.body.longUrl}`,8,JSON.stringify(verify))
+      return res
+        .status(200)
+        .send({status:true, message: "ShortUrl already generated2", data:verify  });
+    }
+
     let urlCode = shortId.generate(longUrl);
 
     let shortUrl = Base_Url + urlCode.toLowerCase();
@@ -68,7 +76,7 @@ const createUrl = async function (req, res) {
     data["longUrl"] = longUrl;
     data["shortUrl"] = shortUrl;
     let createdUrl = await urlModel.create(data);
-    await SET_ASYNC(`${req.body.longUrl}`,86400,JSON.stringify(data))
+    await SET_ASYNC(`${req.body.longUrl}`,8,JSON.stringify(data))
     res.status(201).send({ status:true,data: data });
   } catch (err) {
     res.status(500).send({ status: false, err: err.message });
